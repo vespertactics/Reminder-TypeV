@@ -17,7 +17,10 @@ LIST_CHANNEL_ID = 1398781319722565722
 REACTION_EMOJI = "✅"
 ROLE_KEYWORD = "期生"
 MESSAGE_LOOKBACK_DAYS = 14
-REMIND_AFTER_DAYS = 3
+
+# テストモードを有効にすると3分でリマインド
+IS_TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
+REMIND_AFTER = timedelta(minutes=3) if IS_TEST_MODE else timedelta(days=3)
 
 async def run_remind():
     guild = bot.guilds[0]
@@ -31,7 +34,7 @@ async def run_remind():
 
     now = datetime.now(timezone.utc)
     lookback_limit = now - timedelta(days=MESSAGE_LOOKBACK_DAYS)
-    remind_limit = now - timedelta(days=REMIND_AFTER_DAYS)
+    remind_limit = now - REMIND_AFTER
 
     target_roles = [r for r in guild.roles if ROLE_KEYWORD in r.name]
     target_members = [
@@ -68,7 +71,6 @@ async def run_remind():
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    # GitHub Actionsなどから実行されたときのみ、自動終了型
     if os.getenv("GITHUB_ACTIONS_MODE") == "true":
         await run_remind()
         await bot.close()
