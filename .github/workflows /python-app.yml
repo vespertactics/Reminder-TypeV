@@ -1,33 +1,24 @@
-name: Python App
+name: Run the bot
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
-  schedule:
-    - cron: '0 5 * * *'  # JST 14:00（毎日）
 
 jobs:
-  build:
-
+  run-bot:
     runs-on: ubuntu-latest
-
     steps:
-    - name: リポジトリをチェックアウト
-      uses: actions/checkout@v3
+      - name: Check out code
+        uses: actions/checkout@v3
 
-    - name: Python をセットアップ
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: 依存関係をインストール
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Bot を起動
-      env:
-        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-      run: |
-        python main.py
+      - name: Run the bot
+        run: python main.py
