@@ -23,39 +23,31 @@ IS_TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
 REMIND_AFTER = timedelta(minutes=3) if IS_TEST_MODE else timedelta(days=3)
 
 async def run_remind():
-    print("🔍 リマインド処理開始")
-    guilds = bot.guilds
-    if not guilds:
-        print("❌ Botがどのサーバーにも接続されていません。")
+    print("🔎 run_remind 開始")
+    guild = bot.guilds[0] if bot.guilds else None
+    if not guild:
+        print("❌ ギルド取得失敗")
         return
 
-    guild = guilds[0]
-    print(f"✅ 接続中のギルド: {guild.name} ({guild.id})")
+    print(f"✅ 対象ギルド: {guild.name} ({guild.id})")
 
     target_channel = guild.get_channel(TARGET_CHANNEL_ID)
     remind_channel = guild.get_channel(REMIND_CHANNEL_ID)
     list_channel = guild.get_channel(LIST_CHANNEL_ID)
 
-    if not target_channel:
-        print(f"❌ TARGET_CHANNEL_ID {TARGET_CHANNEL_ID} が見つかりません")
-    if not remind_channel:
-        print(f"❌ REMIND_CHANNEL_ID {REMIND_CHANNEL_ID} が見つかりません")
-    if not list_channel:
-        print(f"❌ LIST_CHANNEL_ID {LIST_CHANNEL_ID} が見つかりません")
-
     if not target_channel or not remind_channel or not list_channel:
-        print("❌ 指定したチャンネルが見つからないため処理を中断します")
+        print("❌ 指定したチャンネルが見つかりません")
         return
 
     now = datetime.now(timezone.utc)
     lookback_limit = now - timedelta(days=MESSAGE_LOOKBACK_DAYS)
     remind_limit = now - REMIND_AFTER
 
-    print(f"⏰ 現在時刻: {now.isoformat()}")
-    print(f"🔎 対象期間: {lookback_limit.isoformat()} 〜 {remind_limit.isoformat()}")
+    print(f"📅 現在時刻: {now}")
+    print(f"📅 チェック対象: {lookback_limit} 以降、{remind_limit} より前")
 
     target_roles = [r for r in guild.roles if ROLE_KEYWORD in r.name]
-    print(f"🎯 対象ロール数: {len(target_roles)}")
+    print(f"🎯 対象ロール: {[r.name for r in target_roles]}")
 
     target_members = [
         m for m in guild.members
@@ -63,12 +55,13 @@ async def run_remind():
     ]
     print(f"👥 対象メンバー数: {len(target_members)}")
 
-    count = 0
     async for message in target_channel.history(limit=200, after=lookback_limit):
+        print(f"📝 チェック中メッセージ: {message.id} ({message.created_at})")
+
         if message.created_at > remind_limit:
+            print("⏭ スキップ（まだ期限前）")
             continue
 
-        count += 1
         reacted_users = set()
         for reaction in message.reactions:
             if str(reaction.emoji) == REACTION_EMOJI:
@@ -76,9 +69,9 @@ async def run_remind():
                     reacted_users.add(user.id)
 
         not_reacted = [m for m in target_members if m.id not in reacted_users]
-        print(f"📨 メッセージID {message.id}: 未リアクション {len(not_reacted)}人")
 
         if not not_reacted:
+            print("✅ 全員リアクション済み")
             continue
 
         mentions = " ".join(m.mention for m in not_reacted)
@@ -91,15 +84,20 @@ async def run_remind():
             f"未リアクション者リスト（メッセージID {message.id}）：{names}"
         )
 
-    print(f"✅ 処理完了（対象メッセージ数: {count}）")
+        print(f"📣 リマインド送信済み: {names}")
 
 @bot.event
 async def on_ready():
-    print(f"🚀 Bot起動成功: {bot.user} (ID: {bot.user.id})")
-    print(f"⚙️ テストモード: {IS_TEST_MODE}, リマインド間隔: {REMIND_AFTER}")
+    print(f"✅ Bot 起動完了: {bot.user} (ID: {bot.user.id})")
+    print(f"🧪 TEST_MODE = {IS_TEST_MODE}")
+    print(f"⚙️ GITHUB_ACTIONS_MODE = {os.getenv('GITHUB_ACTIONS_MODE')}")
+
     if os.getenv("GITHUB_ACTIONS_MODE") == "true":
+        print("🚀 GitHub Actions モードで run_remind を実行")
         await run_remind()
         await bot.close()
+    else:
+        print("👀 GitHub Actions モードではないため常駐")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -111,6 +109,7 @@ async def remind(ctx):
 if __name__ == "__main__":
     TOKEN = os.getenv("DISCORD_TOKEN")
     if TOKEN:
+        print("🔑 TOKEN 取得成功、Bot 起動")
         bot.run(TOKEN)
     else:
         print("❌ DISCORD_TOKEN が設定されていません")
