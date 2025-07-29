@@ -4,27 +4,34 @@ from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 import asyncio
 
+# インテント設定
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.reactions = True
 
+# Bot設定
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-TARGET_CHANNEL_ID = 1398794128103309485
-REMIND_CHANNEL_ID = 1398794128103309485
-LIST_CHANNEL_ID = 1398781319722565722
+# チャンネルID
+TARGET_CHANNEL_ID = 1398794128103309485  # リアクション対象チャンネル
+REMIND_CHANNEL_ID = 1398794128103309485  # リマインド送信チャンネル（＝同じ）
+LIST_CHANNEL_ID = 1398781319722565722    # 未リアクション者リスト出力チャンネル
 
-REACTION_EMOJI = "✅"
+# 設定
+REACTION_EMOJI = "\u2705"  # ✅（メッセージ本文には使用しない）
 ROLE_KEYWORD = "期生"
+EXCLUDE_KEYWORD = "管理用"
 MESSAGE_LOOKBACK_DAYS = 14
 
-# テストモードを有効にすると3分でリマインド
+# テスト・本番切替
 IS_TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 REMIND_AFTER = timedelta(minutes=3) if IS_TEST_MODE else timedelta(days=3)
 
 async def run_remind():
     print("🔎 run_remind 開始")
+    start_time = datetime.now()
+
     guild = bot.guilds[0] if bot.guilds else None
     if not guild:
         print("❌ ギルド取得失敗")
@@ -47,14 +54,17 @@ async def run_remind():
     print(f"📅 現在時刻: {now}")
     print(f"📅 チェック対象: {lookback_limit} 以降、{remind_limit} より前")
 
+    # 対象ロール（「期生」を含む）
     target_roles = [r for r in guild.roles if ROLE_KEYWORD in r.name]
     print(f"🎯 対象ロール: {[r.name for r in target_roles]}")
 
+    # 対象メンバー（管理用を含む表示名は除外）
     target_members = [
         m for m in guild.members
         if not m.bot and any(role.id in [r.id for r in target_roles] for role in m.roles)
+        and EXCLUDE_KEYWORD not in m.display_name
     ]
-    print(f"👥 対象メンバー数: {len(target_members)}")
+    print(f"👥 対象メンバー数（管理用除外済）: {len(target_members)}")
 
     async for message in target_channel.history(limit=200, after=lookback_limit):
         print(f"📝 チェック中メッセージ: {message.id} ({message.created_at})")
@@ -69,27 +79,26 @@ async def run_remind():
                 async for user in reaction.users():
                     reacted_users.add(user.id)
 
-        # 「管理用」がニックネームに含まれているメンバーを除外
-        not_reacted = [
-            m for m in target_members
-            if m.id not in reacted_users and "管理用" not in m.display_name
-        ]
+        not_reacted = [m for m in target_members if m.id not in reacted_users]
 
         if not not_reacted:
-            print("✅ 全員リアクション済み（または除外対象）")
+            print("✅ 対象外または全員確認済み")
             continue
 
         mentions = " ".join(m.mention for m in not_reacted)
         await remind_channel.send(
-            f":warning: 以下のメンバーが [このメッセージ](https://discord.com/channels/{guild.id}/{TARGET_CHANNEL_ID}/{message.id}) に ✅ を押していません。\n{mentions}"
+            f"⚠️ 以下のメンバーが [このメッセージ](https://discord.com/channels/{guild.id}/{TARGET_CHANNEL_ID}/{message.id}) に反応していません。\n{mentions}"
         )
 
         names = ", ".join(m.display_name for m in not_reacted)
         await list_channel.send(
-            f"未リアクション者リスト（メッセージID {message.id}）：{names}"
+            f"📝 未リアクション者リスト（メッセージID {message.id}）：{names}"
         )
 
         print(f"📣 リマインド送信済み: {names}")
+
+    end_time = datetime.now()
+    print(f"⏱️ 処理時間: {end_time - start_time}")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
