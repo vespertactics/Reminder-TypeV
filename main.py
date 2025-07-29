@@ -2,6 +2,7 @@ import os
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
+import asyncio
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -86,19 +87,6 @@ async def run_remind():
 
         print(f"📣 リマインド送信済み: {names}")
 
-@bot.event
-async def on_ready():
-    print(f"✅ Bot 起動完了: {bot.user} (ID: {bot.user.id})")
-    print(f"🧪 TEST_MODE = {IS_TEST_MODE}")
-    print(f"⚙️ GITHUB_ACTIONS_MODE = {os.getenv('GITHUB_ACTIONS_MODE')}")
-
-    if os.getenv("GITHUB_ACTIONS_MODE") == "true":
-        print("🚀 GitHub Actions モードで run_remind を実行")
-        await run_remind()
-        await bot.close()
-    else:
-        print("👀 GitHub Actions モードではないため常駐")
-
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def remind(ctx):
@@ -108,8 +96,22 @@ async def remind(ctx):
 
 if __name__ == "__main__":
     TOKEN = os.getenv("DISCORD_TOKEN")
-    if TOKEN:
-        print("🔑 TOKEN 取得成功、Bot 起動")
-        bot.run(TOKEN)
-    else:
+    GITHUB_ACTIONS_MODE = os.getenv("GITHUB_ACTIONS_MODE", "true").lower() == "true"
+
+    if not TOKEN:
         print("❌ DISCORD_TOKEN が設定されていません")
+    else:
+        if GITHUB_ACTIONS_MODE:
+            print("🚀 GitHub Actions モードで run_remind を実行")
+
+            async def run_bot_once():
+                async with bot:
+                    await bot.login(TOKEN)
+                    await bot.connect()
+                    await run_remind()
+                    await bot.close()
+
+            asyncio.run(run_bot_once())
+        else:
+            print("🟢 常駐モードで起動")
+            bot.run(TOKEN)
