@@ -2,6 +2,8 @@ name: Run the bot
 
 on:
   workflow_dispatch:  # 手動実行用トリガー
+  schedule:
+    - cron: '0 9 * * *'  # 毎日 09:00 UTC → JST 18:00 に相当
 
 jobs:
   run-bot:
