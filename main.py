@@ -20,7 +20,7 @@ ROLE_KEYWORD = "期生"
 MESSAGE_LOOKBACK_DAYS = 14
 
 # テストモードを有効にすると3分でリマインド
-IS_TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
+IS_TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 REMIND_AFTER = timedelta(minutes=3) if IS_TEST_MODE else timedelta(days=3)
 
 async def run_remind():
