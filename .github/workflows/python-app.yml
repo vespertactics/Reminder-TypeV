@@ -24,6 +24,6 @@ jobs:
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
         GITHUB_ACTIONS_MODE: "true"     # ← 必須
-        TEST_MODE: "true"               # ← テスト用
+        TEST_MODE: "false"               # ← テスト用
       run: |
         python main.py
