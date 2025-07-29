@@ -1,130 +1,102 @@
-import os
 import discord
+import os
+import asyncio
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
-import asyncio
 
-# インテント設定
+# 環境変数の読み込み
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+
+# タイムゾーン設定（JST）
+JST = timezone(timedelta(hours=9))
+
+# 対象チャンネルID（✅ リアクション付きメッセージ投稿チャンネル）
+TARGET_CHANNEL_ID = 1398794128103309485
+# リマインド送信先チャンネル
+REMIND_CHANNEL_ID = 1398794128103309485
+# 未リアクション者リスト投稿チャンネル
+REPORT_CHANNEL_ID = 1398781319722565722
+
+# 期生ロール名のキーワード
+GEN_ROLE_KEYWORD = "期生"
+# 除外するニックネームのキーワード
+EXCLUDE_NICKNAME_KEYWORD = "管理用"
+
 intents = discord.Intents.default()
-intents.message_content = True
 intents.members = True
+intents.message_content = True
 intents.reactions = True
-
-# Bot設定
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# チャンネルID
-TARGET_CHANNEL_ID = 1398794128103309485  # リアクション対象チャンネル
-REMIND_CHANNEL_ID = 1398794128103309485  # リマインド送信チャンネル（＝同じ）
-LIST_CHANNEL_ID = 1398781319722565722    # 未リアクション者リスト出力チャンネル
+@bot.event
+async def on_ready():
+    print(f"✅ ログイン成功: {bot.user.name}")
+    await run_reminder()
+    await bot.close()
 
-# 設定
-REACTION_EMOJI = "\u2705"  # ✅（メッセージ本文には使用しない）
-ROLE_KEYWORD = "期生"
-EXCLUDE_KEYWORD = "管理用"
-MESSAGE_LOOKBACK_DAYS = 14
-
-# テスト・本番切替
-IS_TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
-REMIND_AFTER = timedelta(minutes=3) if IS_TEST_MODE else timedelta(days=3)
-
-async def run_remind():
-    print("🔎 run_remind 開始")
-    start_time = datetime.now()
-
-    guild = bot.guilds[0] if bot.guilds else None
-    if not guild:
-        print("❌ ギルド取得失敗")
-        return
-
-    print(f"✅ 対象ギルド: {guild.name} ({guild.id})")
-
+async def run_reminder():
+    guild = bot.guilds[0]
     target_channel = guild.get_channel(TARGET_CHANNEL_ID)
     remind_channel = guild.get_channel(REMIND_CHANNEL_ID)
-    list_channel = guild.get_channel(LIST_CHANNEL_ID)
+    report_channel = guild.get_channel(REPORT_CHANNEL_ID)
 
-    if not target_channel or not remind_channel or not list_channel:
-        print("❌ 指定したチャンネルが見つかりません")
+    now = datetime.now(JST)
+    window = now - timedelta(weeks=2)
+    delay = timedelta(minutes=3 if TEST_MODE else 3 * 24 * 60)
+
+    messages = []
+    async for message in target_channel.history(limit=None, after=window):
+        if message.created_at.replace(tzinfo=timezone.utc) + delay > now:
+            continue
+        if any(reaction.emoji == "✅" for reaction in message.reactions):
+            messages.append(message)
+
+    if not messages:
+        await remind_channel.send("🔔 対象メッセージがありません。")
         return
 
-    now = datetime.now(timezone.utc)
-    lookback_limit = now - timedelta(days=MESSAGE_LOOKBACK_DAYS)
-    remind_limit = now - REMIND_AFTER
-
-    print(f"📅 現在時刻: {now}")
-    print(f"📅 チェック対象: {lookback_limit} 以降、{remind_limit} より前")
-
-    # 対象ロール（「期生」を含む）
-    target_roles = [r for r in guild.roles if ROLE_KEYWORD in r.name]
-    print(f"🎯 対象ロール: {[r.name for r in target_roles]}")
-
-    # 対象メンバー（管理用を含む表示名は除外）
     target_members = [
         m for m in guild.members
-        if not m.bot and any(role.id in [r.id for r in target_roles] for role in m.roles)
-        and EXCLUDE_KEYWORD not in m.display_name
+        if any(GEN_ROLE_KEYWORD in r.name for r in m.roles)
+        and EXCLUDE_NICKNAME_KEYWORD not in (m.display_name or "")
+        and not m.bot
     ]
-    print(f"👥 対象メンバー数（管理用除外済）: {len(target_members)}")
 
-    async for message in target_channel.history(limit=200, after=lookback_limit):
-        print(f"📝 チェック中メッセージ: {message.id} ({message.created_at})")
+    if not target_members:
+        await remind_channel.send("👥 対象ロールのメンバーが見つかりませんでした。")
+        return
 
-        if message.created_at > remind_limit:
-            print("⏭ スキップ（まだ期限前）")
-            continue
+    reminded_users = set()
 
-        reacted_users = set()
-        for reaction in message.reactions:
-            if str(reaction.emoji) == REACTION_EMOJI:
-                async for user in reaction.users():
-                    reacted_users.add(user.id)
+    for message in messages:
+        for member in target_members:
+            has_reacted = False
+            for reaction in message.reactions:
+                if reaction.emoji != "✅":
+                    continue
+                users = [user async for user in reaction.users()]
+                if member in users:
+                    has_reacted = True
+                    break
+            if not has_reacted:
+                reminded_users.add(member)
 
-        not_reacted = [m for m in target_members if m.id not in reacted_users]
+    if not reminded_users:
+        await remind_channel.send("🎉 全員リアクション済みです！")
+        return
 
-        if not not_reacted:
-            print("✅ 対象外または全員確認済み")
-            continue
-
-        mentions = " ".join(m.mention for m in not_reacted)
-        await remind_channel.send(
-            f"⚠️ 以下のメンバーが [このメッセージ](https://discord.com/channels/{guild.id}/{TARGET_CHANNEL_ID}/{message.id}) に反応していません。\n{mentions}"
-        )
-
-        names = ", ".join(m.display_name for m in not_reacted)
-        await list_channel.send(
-            f"📝 未リアクション者リスト（メッセージID {message.id}）：{names}"
-        )
-
-        print(f"📣 リマインド送信済み: {names}")
-
-    end_time = datetime.now()
-    print(f"⏱️ 処理時間: {end_time - start_time}")
+    # メンション付きリマインド送信
+    mentions = "\n".join(member.mention for member in reminded_users)
+    await remind_channel.send(f"📣 リマインド送信対象:\n{mentions}")
+    await report_channel.send(f"📝 未リアクション者一覧:\n{mentions}")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def remind(ctx):
-    await ctx.send("リマインド処理を開始します…")
-    await run_remind()
-    await ctx.send("リマインド完了しました！")
+    await ctx.send("🔁 リマインド処理を開始します。")
+    await run_reminder()
+    await ctx.send("✅ リマインド完了。")
 
 if __name__ == "__main__":
-    TOKEN = os.getenv("DISCORD_TOKEN")
-    GITHUB_ACTIONS_MODE = os.getenv("GITHUB_ACTIONS_MODE", "true").lower() == "true"
-
-    if not TOKEN:
-        print("❌ DISCORD_TOKEN が設定されていません")
-    else:
-        if GITHUB_ACTIONS_MODE:
-            print("🚀 GitHub Actions モードで run_remind を実行")
-
-            async def run_bot_once():
-                async with bot:
-                    await bot.login(TOKEN)
-                    await bot.connect()
-                    await run_remind()
-                    await bot.close()
-
-            asyncio.run(run_bot_once())
-        else:
-            print("🟢 常駐モードで起動")
-            bot.run(TOKEN)
+    asyncio.run(bot.start(DISCORD_TOKEN))
