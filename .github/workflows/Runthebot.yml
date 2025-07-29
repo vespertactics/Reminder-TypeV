@@ -27,4 +27,4 @@ jobs:
           GITHUB_ACTIONS_MODE: "true"
           TEST_MODE: "false"  # テスト時は true に変更
         run: |
-          python app.py
+          python main.py
