@@ -3,7 +3,7 @@ name: Run the bot
 on:
   workflow_dispatch:  # 手動実行を許可
   schedule:
-    - cron: '15 12 * * *'  # 毎日 09:00 UTC = 18:00 JST に自動実行
+    - cron: '21 12 * * *'  # 毎日 09:00 UTC = 18:00 JST に自動実行
 
 jobs:
   run-bot:
