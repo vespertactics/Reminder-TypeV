@@ -69,10 +69,14 @@ async def run_remind():
                 async for user in reaction.users():
                     reacted_users.add(user.id)
 
-        not_reacted = [m for m in target_members if m.id not in reacted_users]
+        # 「管理用」がニックネームに含まれているメンバーを除外
+        not_reacted = [
+            m for m in target_members
+            if m.id not in reacted_users and "管理用" not in m.display_name
+        ]
 
         if not not_reacted:
-            print("✅ 全員リアクション済み")
+            print("✅ 全員リアクション済み（または除外対象）")
             continue
 
         mentions = " ".join(m.mention for m in not_reacted)
