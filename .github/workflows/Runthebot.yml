@@ -3,7 +3,7 @@ name: Run the bot
 on:
   workflow_dispatch:  # 手動実行を許可
   schedule:
-    - cron: '30 13 * * *'  # 毎日 09:00 UTC = 18:00 JST に自動実行
+    - cron: '0 2 * * *'  # 毎日 09:00 UTC = 18:00 JST に自動実行
 
 jobs:
   run-bot:
@@ -24,10 +24,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🚀 Bot を実行
+      - name: 🚀 Bot を実行（自動モード）
         env:
-          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}  # 必須: BotトークンをGitHub Secretsで設定
-          GITHUB_ACTIONS_MODE: "true"  # main.py内でGitHub実行判定に使用
-          TEST_MODE: "false"  # テスト実行時は true に切り替え
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}  # BotトークンはGitHub Secretsで設定済み
         run: |
-          python main.py
+          python main.py --auto
