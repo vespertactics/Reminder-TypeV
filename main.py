@@ -54,7 +54,7 @@ async def run_reminder():
 
     now = datetime.now(JST)
     window = now - timedelta(weeks=2)
-    delay = timedelta(minutes=3 if IS_AUTO_MODE else 3 * 24 * 60)  # 自動は3分、手動は3日
+    delay = timedelta(minutes=3 if not IS_AUTO_MODE else 3 * 24 * 60)  # 手動は3分、 自動は3日
 
     messages = []
     async for message in target_channel.history(limit=None, after=window):
@@ -119,8 +119,6 @@ async def shutdown(ctx):
     await bot.close()
 
 if __name__ == "__main__":
-    # 自動モードは asyncio.run で起動（非同期）
-    # 手動モードは bot.run() で起動（同期・コマンド待機）
     if IS_AUTO_MODE:
         asyncio.run(bot.start(DISCORD_TOKEN))
     else:
