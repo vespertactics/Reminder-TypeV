@@ -1,13 +1,14 @@
 name: Run the bot
 
 on:
-  workflow_dispatch:  # 手動実行用トリガー
+  workflow_dispatch:  # 手動実行
   schedule:
-    - cron: '0 9 * * *'  # 毎日 09:00 UTC → JST 18:00 に相当
+    - cron: '0 9 * * *'  # 毎日 09:00 UTC = 18:00 JST
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # 最大10分で打ち切り
 
     steps:
       - name: リポジトリをチェックアウト
