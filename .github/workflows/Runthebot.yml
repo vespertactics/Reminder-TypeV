@@ -1,29 +1,30 @@
 name: Run the bot
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 手動実行用トリガー
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Python をセットアップ
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: 依存パッケージをインストール
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Discord bot once
+      - name: Bot を実行
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          GITHUB_ACTIONS_MODE: true
+          GITHUB_ACTIONS_MODE: "true"
+          TEST_MODE: "false"  # テスト時は true に変更
         run: |
-          python main.py
+          python app.py
