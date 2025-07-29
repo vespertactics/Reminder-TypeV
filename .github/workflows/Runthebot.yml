@@ -3,12 +3,12 @@ name: Run the bot
 on:
   workflow_dispatch:  # 手動実行を許可
   schedule:
-    - cron: '21 12 * * *'  # 毎日 09:00 UTC = 18:00 JST に自動実行
+    - cron: '30 12 * * *'  # 毎日 09:00 UTC = 18:00 JST に自動実行
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # 最大10分でタイムアウト
+    timeout-minutes: 20  # 最大10分でタイムアウト
 
     steps:
       - name: 📥 リポジトリをチェックアウト
