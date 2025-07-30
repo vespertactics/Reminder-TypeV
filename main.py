@@ -1,125 +1,100 @@
 import discord
-import os
-import sys
 import asyncio
-from discord.ext import commands
+import os
+import argparse
 from datetime import datetime, timedelta, timezone
 
-# 環境変数の読み込み
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-
-# コマンドライン引数で自動モード判定
-IS_AUTO_MODE = "--auto" in sys.argv
-
-# タイムゾーン設定（JST）
-JST = timezone(timedelta(hours=9))
-
-# 対象チャンネルID（✅ リアクション付きメッセージ投稿チャンネル）
-TARGET_CHANNEL_ID = 1398794128103309485
-# リマインド送信先チャンネル
-REMIND_CHANNEL_ID = 1398794128103309485
-# 未リアクション者リスト投稿チャンネル
-REPORT_CHANNEL_ID = 1398781319722565722
-
-# 期生ロール名のキーワード
-GEN_ROLE_KEYWORD = "期生"
-# 除外するニックネームのキーワード
-EXCLUDE_NICKNAME_KEYWORD = "管理用"
-
-# 手動操作を許可するユーザーIDセット（必要に応じて変更）
-ALLOWED_USERS = {1306911908929998899, 1039126356451131452}
-
 intents = discord.Intents.default()
+intents.guilds = True
 intents.members = True
+intents.messages = True
 intents.message_content = True
 intents.reactions = True
-bot = commands.Bot(command_prefix="!", intents=intents)
 
-@bot.event
+client = discord.Client(intents=intents)
+
+# 固定設定（必要に応じて編集）
+TARGET_CHANNEL_ID = 1398794128103309485  # ✅リアクション対象チャンネル
+REPORT_CHANNEL_ID = 1398781319722565722  # リスト報告用チャンネル
+REMIND_DAYS = 3
+LOOKBACK_DAYS = 14
+TARGET_ROLE_KEYWORDS = ["期生"]
+EXCLUDED_NICKNAME_KEYWORD = "管理用"
+
+# 引数処理
+parser = argparse.ArgumentParser()
+parser.add_argument("--auto", action="store_true")
+args = parser.parse_args()
+
+@client.event
 async def on_ready():
-    print(f"✅ ログイン成功: {bot.user.name}")
-    if IS_AUTO_MODE:
-        # 自動モードなら処理して即終了
-        await run_reminder()
-        await bot.close()
-    else:
-        # 手動モードなら常駐してコマンド待機
-        print("🤖 手動モードで起動中。コマンドを待機しています。")
+    print(f"ログイン成功: {client.user}")
+    await run_reminder()
+    await client.close()
 
 async def run_reminder():
-    guild = bot.guilds[0]
+    guild = client.guilds[0]
     target_channel = guild.get_channel(TARGET_CHANNEL_ID)
-    remind_channel = guild.get_channel(REMIND_CHANNEL_ID)
     report_channel = guild.get_channel(REPORT_CHANNEL_ID)
 
-    now = datetime.now(JST)
-    window = now - timedelta(weeks=2)
-    delay = timedelta(minutes=3 if not IS_AUTO_MODE else 3 * 24 * 60)  # 手動は3分、 自動は3日
+    now = datetime.now(timezone.utc)
+    after_time = now - timedelta(days=LOOKBACK_DAYS)
 
-    messages = []
-    async for message in target_channel.history(limit=None, after=window):
-        if message.created_at.replace(tzinfo=timezone.utc) + delay > now:
-            continue
-        if any(reaction.emoji == "✅" for reaction in message.reactions):
-            messages.append(message)
-
-    if not messages:
-        await remind_channel.send("🔔 対象メッセージがありません。")
-        return
-
-    target_members = [
-        m for m in guild.members
-        if any(GEN_ROLE_KEYWORD in r.name for r in m.roles)
-        and EXCLUDE_NICKNAME_KEYWORD not in (m.display_name or "")
-        and not m.bot
+    # リアクションチェック対象メッセージ収集
+    messages = [
+        msg async for msg in target_channel.history(after=after_time, limit=None)
+        if (now - msg.created_at).days >= REMIND_DAYS and msg.reactions
     ]
 
-    if not target_members:
-        await remind_channel.send("👥 対象ロールのメンバーが見つかりませんでした。")
-        return
+    # 対象ロールメンバー収集
+    target_members = [
+        member for member in guild.members
+        if any(role.name.endswith("期生") for role in member.roles)
+        and not (member.nick and EXCLUDED_NICKNAME_KEYWORD in member.nick)
+        and not member.bot
+    ]
 
-    reminded_users = set()
+    # 結果格納
+    reminders_sent = 0
+    report_lines = []
 
-    for message in messages:
-        for member in target_members:
-            has_reacted = False
-            for reaction in message.reactions:
-                if reaction.emoji != "✅":
-                    continue
-                users = [user async for user in reaction.users()]
-                if member in users:
-                    has_reacted = True
-                    break
-            if not has_reacted:
-                reminded_users.add(member)
+    for msg in messages:
+        # ✅リアクションオブジェクト取得
+        reaction = discord.utils.get(msg.reactions, emoji="✅")
+        if not reaction:
+            continue
 
-    if not reminded_users:
-        await remind_channel.send("🎉 全員リアクション済みです！")
-        return
+        # リアクションしたユーザー取得
+        reactors = [user async for user in reaction.users() if not user.bot]
+        non_reactors = [member for member in target_members if member not in reactors]
 
-    mentions = "\n".join(member.mention for member in reminded_users)
-    await remind_channel.send(f"📣 リマインド送信対象:\n{mentions}")
-    await report_channel.send(f"📝 未リアクション者一覧:\n{mentions}")
+        if not non_reactors:
+            continue
 
-@bot.command()
-async def remind(ctx):
-    if ctx.author.id not in ALLOWED_USERS:
-        await ctx.send("🚫 あなたにはこのコマンドを実行する権限がありません。")
-        return
-    await ctx.send("🔁 リマインド処理を開始します。")
-    await run_reminder()
-    await ctx.send("✅ リマインド完了。")
+        # メッセージリンク
+        msg_link = f"https://discord.com/channels/{guild.id}/{target_channel.id}/{msg.id}"
 
-@bot.command()
-async def shutdown(ctx):
-    if ctx.author.id not in ALLOWED_USERS:
-        await ctx.send("🚫 あなたにはこのコマンドを実行する権限がありません。")
-        return
-    await ctx.send("👋 Botをシャットダウンします。")
-    await bot.close()
+        # リマインド送信
+        mention_text = "、".join(m.mention for m in non_reactors)
+        await target_channel.send(
+            f"{mention_text}\n以下のタスクに✅リアクションがまだのようです（投稿から3日以上経過）\n{msg_link}"
+        )
+        reminders_sent += 1
+
+        # 報告用出力
+        name_list = ", ".join(f"{m.display_name}" for m in non_reactors)
+        report_lines.append(f"- [タスク]({msg_link}): {name_list}")
+
+    # 報告送信
+    if reminders_sent == 0:
+        await report_channel.send("現時点でリマインド対象者はいません。")
+    else:
+        header = f"✅ リマインドを送信したタスク一覧（{now.astimezone(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M')} JST）"
+        await report_channel.send(f"{header}\n" + "\n".join(report_lines))
 
 if __name__ == "__main__":
-    if IS_AUTO_MODE:
-        asyncio.run(bot.start(DISCORD_TOKEN))
-    else:
-        bot.run(DISCORD_TOKEN)
+    token = os.getenv("DISCORD_TOKEN")
+    if not token:
+        print("DISCORD_TOKENが設定されていません。")
+        exit(1)
+    client.run(token)
