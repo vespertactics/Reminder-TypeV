@@ -79,9 +79,10 @@ async def run_reminder():
         await report_channel.send("👥 対象ロールのメンバーが見つかりませんでした。")
         return
 
-    reminded_users = set()
+    all_not_reacted = set()
 
     for message in messages:
+        not_reacted = []
         for member in target_members:
             has_reacted = False
             for reaction in message.reactions:
@@ -92,14 +93,20 @@ async def run_reminder():
                     has_reacted = True
                     break
             if not has_reacted:
-                reminded_users.add(member)
+                not_reacted.append(member)
+                all_not_reacted.add(member)
 
-    if not reminded_users:
+        if not_reacted:
+            mentions = "\n".join(m.mention for m in not_reacted)
+            await remind_channel.send(
+                f"⚠️ 以下のメンバーが [このメッセージ](https://discord.com/channels/{guild.id}/{TARGET_CHANNEL_ID}/{message.id}) に反応していません。\n{mentions}"
+            )
+
+    if not all_not_reacted:
         await report_channel.send("🎉 全員リアクション済みです！")
         return
 
-    mentions = "\n".join(member.mention for member in reminded_users)
-    await remind_channel.send(f"📣 リマインド送信対象:\n{mentions}")
+    mentions = "\n".join(member.mention for member in all_not_reacted)
     await report_channel.send(f"📝 未リアクション者一覧:\n{mentions}")
 
 @bot.command()
