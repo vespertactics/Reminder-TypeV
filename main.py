@@ -65,7 +65,7 @@ async def run_reminder():
             messages.append(message)
 
     if not messages:
-        await report_channel.send("🔔 対象メッセージがありません。")
+        await report_channel.send("🔔 現時点でリマインド対象者はいません。")
         return
 
     target_members = [
