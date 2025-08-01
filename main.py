@@ -1,3 +1,50 @@
+import discord
+import os
+import sys
+import asyncio
+from discord.ext import commands
+from datetime import datetime, timedelta, timezone
+
+# 環境変数読み込み
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
+# モード判定（--auto なければテストモード）
+IS_AUTO_MODE = "--auto" in sys.argv
+
+# タイムゾーン（JST）
+JST = timezone(timedelta(hours=9))
+
+# チャンネルと除外キーワード定義
+TARGET_CHANNEL_ID = 1398794128103309485
+REMIND_CHANNEL_ID = 1398794128103309485
+REPORT_CHANNEL_ID = 1398781319722565722
+EXCLUDE_NICKNAME_KEYWORD = "管理用"
+
+# ロール名キーワード定義
+GEN_ROLE_KEYWORD = "期生"  # ✅のときの対象
+LIB_ROLE_KEYWORD = "図書委員会"  # ☑️のときの対象
+
+intents = discord.Intents.default()
+intents.guilds = True
+intents.members = True
+intents.messages = True
+intents.message_content = True
+intents.reactions = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    if IS_AUTO_MODE:
+        await run_reminder()
+        await bot.close()
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def remind(ctx):
+    await run_reminder()
+
 async def run_reminder():
     guild = bot.guilds[0]
     target_channel = guild.get_channel(TARGET_CHANNEL_ID)
@@ -11,7 +58,7 @@ async def run_reminder():
     # リアクションと対象ロールのキーワードマップ
     REACTION_ROLE_MAP = {
         "✅": GEN_ROLE_KEYWORD,
-        "☑️": "図書委員会"
+        "☑️": LIB_ROLE_KEYWORD
     }
 
     messages = []
@@ -59,3 +106,6 @@ async def run_reminder():
     else:
         mentions = "\n".join(member.mention for member in all_not_reacted)
         await report_channel.send(f"📝 未リアクション者一覧:\n{mentions}")
+
+# 起動
+bot.run(DISCORD_TOKEN)
