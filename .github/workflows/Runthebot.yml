@@ -6,7 +6,7 @@ on:
 
   # ✅ 毎日18:00 JST（= 09:00 UTC）に自動実行
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '0 10 * * *'
 
 jobs:
   run-bot:
