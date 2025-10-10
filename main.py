@@ -21,8 +21,9 @@ REPORT_CHANNEL_ID = 1398781319722565722
 EXCLUDE_NICKNAME_KEYWORD = "管理用"
 
 # ロール名キーワード定義
-GEN_ROLE_KEYWORD = "期生"  # ✅のときの対象
+GEN_ROLE_KEYWORD = "期生"        # ✅のときの対象
 LIB_ROLE_KEYWORD = "図書委員会"  # ☑️のときの対象
+NEW_ROLE_KEYWORD = "新人"        # 🌱のときの対象 ← ★追加
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -58,7 +59,8 @@ async def run_reminder():
     # リアクションと対象ロールのキーワードマップ
     REACTION_ROLE_MAP = {
         "✅": GEN_ROLE_KEYWORD,
-        "☑️": LIB_ROLE_KEYWORD
+        "☑️": LIB_ROLE_KEYWORD,
+        "🌱": NEW_ROLE_KEYWORD     # ← ★追加
     }
 
     messages = []
