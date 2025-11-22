@@ -53,7 +53,7 @@ async def run_reminder():
     report_channel = guild.get_channel(REPORT_CHANNEL_ID)
 
     now = datetime.now(JST)
-    window = now - timedelta(days=5)
+    window = now - timedelta(days=6)
     delay = timedelta(minutes=3 if not IS_AUTO_MODE else 3 * 24 * 60)
 
     # リアクションと対象ロールのキーワードマップ
