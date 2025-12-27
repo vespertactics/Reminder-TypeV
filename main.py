@@ -54,7 +54,7 @@ async def run_reminder():
 
     now = datetime.now(JST)
     window = now - timedelta(days=8)
-    delay = timedelta(minutes=3 if not IS_AUTO_MODE else 3 * 24 * 60)
+    delay = timedelta(minutes=3 if not IS_AUTO_MODE else 2 * 24 * 60)
 
     # リアクションと対象ロールのキーワードマップ
     REACTION_ROLE_MAP = {
